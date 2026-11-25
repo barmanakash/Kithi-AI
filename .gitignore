@@ -1,20 +1,28 @@
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+build/
+dist/
+
 # Python
+__pycache__/
+*.py[cod]
 venv/
 .venv/
-__pycache__/
-*.pyc
-.pytest_cache/
 
-# Secrets and local data
-.env
+# Uploaded user files
 server/uploads/*
 !server/uploads/.gitkeep
 
-# Node
-node_modules/
-client/build/
+# IDE
+.vscode/
+.idea/
 
-# OS / editor
+# OS
 .DS_Store
 Thumbs.db
-.vscode/
