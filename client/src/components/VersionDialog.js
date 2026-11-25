@@ -26,7 +26,7 @@ import { useToast } from "../context/ToastContext";
 import { applicationsApi, generateApi } from "../services/endpoints";
 import { errorMessage, formatDateTime } from "../utils/format";
 
-const COVER_NOTE_MAX = 5000; // matches the backend Application.cover_note limit
+
 
 async function readableError(err, fallback) {
   const body = err?.response?.data;
@@ -110,16 +110,11 @@ export default function VersionDialog({ versionId, onClose, onChanged }) {
 
   const saveAsCoverNote = async () => {
     if (dirty && !(await save())) return;
-    const text = (isLetter ? letter : version.text).trim();
-    if (text.length > COVER_NOTE_MAX) {
-      toast.error(`A cover note can hold ${COVER_NOTE_MAX} characters. Shorten the letter first.`);
-      return;
-    }
     setBusy("note");
     try {
       const res = await applicationsApi.fromJob(version.job_id);
-      await applicationsApi.update(res.application.id, { cover_note: text });
-      toast.success(`Saved as the cover note on your ${version.company} application.`);
+      await applicationsApi.update(res.application.id, { cover_letter_version_id: versionId });
+      toast.success(`Attached as the cover letter on your ${version.company} application.`);
     } catch (err) {
       toast.error(errorMessage(err, "Could not attach the letter to an application"));
     } finally {
@@ -245,7 +240,7 @@ export default function VersionDialog({ versionId, onClose, onChanged }) {
         </Button>
         {isLetter && (
           <Button onClick={saveAsCoverNote} disabled={!version || Boolean(busy)} startIcon={busy === "note" ? <CircularProgress size={16} /> : <AddTaskOutlined />}>
-            Save as application cover note
+            Attach to my application
           </Button>
         )}
         <span style={{ flexGrow: 1 }} />

@@ -76,3 +76,29 @@ export const scamApi = {
   list: (params = {}) => data(api.get("/scam/assessments", { params })),
   remove: (id) => data(api.delete(`/scam/assessments/${id}`)),
 };
+
+// Resume Generation: tailored resumes, cover letters and bullet rewrites (server: /api/generate/*).
+export const generateApi = {
+  tailorResume: (body) => data(api.post("/generate/tailored-resume", body, { timeout: AI_TIMEOUT })),
+  coverLetter: (body) => data(api.post("/generate/cover-letter", body, { timeout: AI_TIMEOUT })),
+  improveBullets: (body) => data(api.post("/generate/improve-bullets", body, { timeout: AI_TIMEOUT })),
+  list: (params = {}) => data(api.get("/generate/versions", { params })),
+  get: (id) => data(api.get(`/generate/versions/${id}`)),
+  update: (id, body) => data(api.put(`/generate/versions/${id}`, body)),
+  remove: (id) => data(api.delete(`/generate/versions/${id}`)),
+  // Returns a Blob (Word document).
+  exportDocx: (id) => data(api.get(`/generate/versions/${id}/export`, { responseType: "blob" })),
+};
+
+// Applications tracking (server: /api/applications/*). Kithi never submits an application for the user.
+export const applicationsApi = {
+  list: (params = {}) => data(api.get("/applications", { params })),
+  stats: () => data(api.get("/applications/stats")),
+  get: (id) => data(api.get(`/applications/${id}`)),
+  create: (body) => data(api.post("/applications", body)),
+  fromJob: (jobId) => data(api.post(`/applications/from-job/${jobId}`)),
+  update: (id, body) => data(api.put(`/applications/${id}`, body)),
+  changeStatus: (id, status, extra = {}) => data(api.post(`/applications/${id}/status`, { status, ...extra })),
+  remove: (id) => data(api.delete(`/applications/${id}`)),
+  qualityCheck: (id) => data(api.post(`/applications/${id}/quality-check`)),
+};
