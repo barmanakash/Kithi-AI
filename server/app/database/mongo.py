@@ -99,6 +99,11 @@ INDEXES: dict[str, list[tuple[list[tuple[str, int]], dict]]] = {
         ([("user_id", 1), ("status", 1)], {}),
         ([("user_id", 1), ("follow_up_date", 1)], {}),
     ],
+    "recruiters": [([("user_id", 1), ("updated_at", -1)], {})],
+    "recruiter_messages": [
+        ([("user_id", 1), ("status", 1), ("updated_at", -1)], {}),
+        ([("user_id", 1), ("recruiter_id", 1)], {}),
+    ],
     "agent_tasks": [([("user_id", 1), ("status", 1), ("created_at", -1)], {})],
     "activity_logs": [([("user_id", 1), ("created_at", -1)], {})],
 }

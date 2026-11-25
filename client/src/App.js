@@ -10,8 +10,6 @@ import MyResume from "./pages/MyResume";
 import ResumeIntelligence from "./pages/ResumeIntelligence";
 import JobSearch from "./pages/JobSearch";
 import JobMatches from "./pages/JobMatches";
-import Applications from "./pages/Applications";
-import Analytics from "./pages/Analytics";
 import ScamDetection from "./pages/ScamDetection";
 import Settings from "./pages/Settings";
 
@@ -31,8 +29,6 @@ export default function App() {
           <Route path="/job-matches" element={<JobMatches />} />
           <Route path="/resume" element={<MyResume />} />
           <Route path="/resume-intelligence" element={<ResumeIntelligence />} />
-          <Route path="/applications" element={<Applications />} />
-          <Route path="/analytics" element={<Analytics />} />
           <Route path="/scam-detection" element={<ScamDetection />} />
           <Route path="/settings" element={<Settings />} />
           {PENDING_ITEMS.map((item) => (

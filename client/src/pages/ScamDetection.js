@@ -1,212 +1,228 @@
 import { useState } from "react";
 import {
   Alert,
-  AlertTitle,
   Box,
   Button,
   Card,
   CardContent,
   CardHeader,
-  Chip,
-  CircularProgress,
-  Divider,
+  Checkbox,
+  Collapse,
+  FormControlLabel,
   Grid,
   IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  MenuItem,
+  Skeleton,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
+import ExpandMore from "@mui/icons-material/ExpandMore";
 import PageHeader from "../components/PageHeader";
-import AnimatedPage from "../components/AnimatedPage";
+import ScamReport, { ScamChip } from "../components/jobs/ScamReport";
+import ConfirmDialog from "../components/ConfirmDialog";
 import useApi from "../hooks/useApi";
 import { useToast } from "../context/ToastContext";
-import { jobsApi, scamApi } from "../services/endpoints";
+import { scamApi } from "../services/endpoints";
 import { errorMessage, formatDateTime } from "../utils/format";
-import { SCAM_LEVELS } from "../utils/statuses";
 
-function ResultCard({ result }) {
-  const meta = SCAM_LEVELS[result.risk_level] || SCAM_LEVELS.low_concern;
+const EMPTY = { text: "", title: "", company: "", url: "", contact_email: "", save: true };
+const clean = (v) => {
+  const t = v.trim();
+  return t || null;
+};
+
+function CheckForm({ onDone }) {
+  const [form, setForm] = useState(EMPTY);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const valid = form.text.trim().length >= 20;
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!valid) return;
+    setLoading(true);
+    setError("");
+    let url = clean(form.url);
+    if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+    try {
+      const res = await scamApi.assess({
+        text: form.text.trim(),
+        title: clean(form.title),
+        company: clean(form.company),
+        url,
+        contact_email: clean(form.contact_email),
+        save: form.save,
+      });
+      setReport(res);
+      if (form.save) onDone();
+    } catch (err) {
+      setError(errorMessage(err, "The check failed"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Grid container spacing={2.5}>
+      <Grid item xs={12} lg={6}>
+        <Card>
+          <CardHeader title="Check a job listing or message" subheader="Paste the text of a posting, recruiter email or chat. Nothing is sent anywhere." />
+          <CardContent sx={{ pt: 0 }}>
+            <form onSubmit={submit}>
+              <Stack spacing={2}>
+                {error && <Alert severity="error">{error}</Alert>}
+                <TextField
+                  size="small"
+                  required
+                  multiline
+                  minRows={8}
+                  maxRows={16}
+                  label="Listing or message text"
+                  value={form.text}
+                  onChange={set("text")}
+                  inputProps={{ maxLength: 30000 }}
+                  helperText="At least 20 characters."
+                />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField size="small" fullWidth label="Job title (optional)" value={form.title} onChange={set("title")} inputProps={{ maxLength: 200 }} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField size="small" fullWidth label="Company (optional)" value={form.company} onChange={set("company")} inputProps={{ maxLength: 200 }} helperText="Used to compare against email domains" />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField size="small" fullWidth label="Posting URL (optional)" value={form.url} onChange={set("url")} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField size="small" fullWidth label="Contact email (optional)" type="email" value={form.contact_email} onChange={set("contact_email")} />
+                  </Grid>
+                </Grid>
+                <FormControlLabel control={<Checkbox checked={form.save} onChange={(e) => setForm((f) => ({ ...f, save: e.target.checked }))} />} label="Save this check to my history" />
+                <Box>
+                  <Button type="submit" variant="contained" disabled={!valid || loading}>
+                    {loading ? "Checking..." : "Run check"}
+                  </Button>
+                </Box>
+              </Stack>
+            </form>
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid item xs={12} lg={6}>
+        <Card sx={{ height: "100%" }}>
+          <CardHeader title="Result" />
+          <CardContent sx={{ pt: 0 }}>
+            {report ? (
+              <ScamReport report={report} />
+            ) : (
+              <Typography color="text.secondary">
+                The result lists each warning signal with the exact text that triggered it. It reports a concern level, never a verdict.
+              </Typography>
+            )}
+          </CardContent>
+        </Card>
+      </Grid>
+    </Grid>
+  );
+}
+
+function History({ refreshKey }) {
+  const toast = useToast();
+  const { data, loading, error, reload } = useApi(() => scamApi.list({ limit: 50 }), [refreshKey]);
+  const [expanded, setExpanded] = useState(null);
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const items = data?.items || [];
+
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await scamApi.remove(toDelete.id);
+      toast.success("Check deleted");
+      setToDelete(null);
+      reload();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <Card sx={{ mt: 3 }}>
-      <CardContent>
-        <Alert severity={meta.severity} sx={{ mb: 2 }}>
-          <AlertTitle>
-            {meta.label} - concern score {result.concern_score}/100 (confidence: {result.confidence})
-          </AlertTitle>
-          {result.uncertainty}
-        </Alert>
-
-        {result.signals.length > 0 ? (
-          <>
-            <Typography variant="subtitle2" gutterBottom>Warning signs found ({result.signals.length})</Typography>
-            <Stack spacing={1.5} sx={{ mb: 3 }}>
-              {result.signals.map((s) => (
-                <Box key={s.key} sx={{ p: 1.5, border: 1, borderColor: "divider", borderRadius: 2 }}>
-                  <Stack direction="row" justifyContent="space-between" spacing={1}>
-                    <Typography variant="body2" fontWeight={600}>{s.description}</Typography>
-                    <Chip size="small" variant="outlined" label={`+${s.weight}`} />
-                  </Stack>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, wordBreak: "break-word" }}>
-                    Evidence: "{s.evidence}"
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
-          </>
+      <CardHeader title="History" subheader="Your saved checks, newest first" />
+      <CardContent sx={{ pt: 0 }}>
+        {error && <Alert severity="error">{error}</Alert>}
+        {loading && !data ? (
+          <Skeleton variant="rounded" height={60} />
+        ) : items.length === 0 && !error ? (
+          <Typography color="text.secondary">No saved checks yet.</Typography>
         ) : (
-          <Typography color="text.secondary" sx={{ mb: 3 }}>
-            None of the rule-based checks found a warning sign. That does not prove the listing is genuine.
-          </Typography>
+          <Stack spacing={1.5}>
+            {items.map((item) => (
+              <Box key={item.id} sx={{ border: 1, borderColor: "divider", borderRadius: 2 }}>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 1.5 }}>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap>
+                      {item.title || item.company || "Pasted text"}
+                      {item.title && item.company ? ` - ${item.company}` : ""}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDateTime(item.created_at)}
+                    </Typography>
+                  </Box>
+                  <ScamChip level={item.result?.risk_level} score={item.result?.concern_score} />
+                  <Tooltip title="Details">
+                    <IconButton size="small" onClick={() => setExpanded(expanded === item.id ? null : item.id)} aria-label="Toggle details" sx={{ transform: expanded === item.id ? "rotate(180deg)" : "none" }}>
+                      <ExpandMore />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Delete">
+                    <IconButton size="small" color="error" onClick={() => setToDelete(item)} aria-label="Delete check">
+                      <DeleteOutline fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+                <Collapse in={expanded === item.id} unmountOnExit>
+                  <Box sx={{ p: 2, pt: 0 }}>
+                    <ScamReport report={{ ...item.result, injection_flags: item.injection_flags }} />
+                  </Box>
+                </Collapse>
+              </Box>
+            ))}
+          </Stack>
         )}
-
-        <Typography variant="subtitle2" gutterBottom>How to verify the employer</Typography>
-        <List dense disablePadding>
-          {result.verification_steps.map((step) => (
-            <ListItem key={step} disableGutters>
-              <ListItemText primary={step} />
-            </ListItem>
-          ))}
-        </List>
       </CardContent>
+
+      <ConfirmDialog
+        open={Boolean(toDelete)}
+        title="Delete this check?"
+        message="It will be removed from your history."
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={remove}
+        onClose={() => setToDelete(null)}
+      />
     </Card>
   );
 }
 
 export default function ScamDetection() {
-  const toast = useToast();
-  const jobs = useApi(() => jobsApi.list({ limit: 100 }));
-  const history = useApi(() => scamApi.list());
-  const [form, setForm] = useState({ job_id: "", text: "", company: "", url: "", contact_email: "" });
-  const [checking, setChecking] = useState(false);
-  const [result, setResult] = useState(null);
-
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const canCheck = form.job_id || form.text.trim().length >= 20;
-
-  const check = async (e) => {
-    e.preventDefault();
-    setChecking(true);
-    try {
-      const body = {
-        job_id: form.job_id || null,
-        text: form.text.trim() || null,
-        company: form.company.trim() || null,
-        url: form.url.trim() || null,
-        contact_email: form.contact_email.trim() || null,
-      };
-      setResult(await scamApi.assess(body));
-      history.reload();
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const remove = async (id) => {
-    try {
-      await scamApi.remove(id);
-      history.reload();
-    } catch (err) {
-      toast.error(errorMessage(err));
-    }
-  };
-
+  const [refreshKey, setRefreshKey] = useState(0);
   return (
-    <AnimatedPage>
+    <>
       <PageHeader
         title="Scam Detection"
-        subtitle="A transparent, rule-based check. It shows evidence and uncertainty, and never declares a listing fraudulent or safe."
+        subtitle="Spot warning signs in job listings and recruiter messages. Evidence and uncertainty are always shown."
       />
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} lg={7}>
-          <Card>
-            <CardContent component="form" onSubmit={check}>
-              <Stack spacing={2}>
-                <TextField select label="Check a saved job (optional)" value={form.job_id} onChange={set("job_id")} fullWidth>
-                  <MenuItem value="">Paste a listing instead</MenuItem>
-                  {(jobs.data?.jobs || []).map((j) => (
-                    <MenuItem key={j.id} value={j.id}>{j.title} - {j.company}</MenuItem>
-                  ))}
-                </TextField>
-                {!form.job_id && (
-                  <TextField
-                    label="Listing text, recruiter message or email"
-                    value={form.text}
-                    onChange={set("text")}
-                    multiline
-                    minRows={8}
-                    maxRows={18}
-                    fullWidth
-                    helperText="Paste exactly what you received. It is analysed locally and treated as untrusted text."
-                  />
-                )}
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
-                    <TextField label="Company name (optional)" value={form.company} onChange={set("company")} fullWidth inputProps={{ maxLength: 200 }} />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField label="Listing URL (optional)" value={form.url} onChange={set("url")} fullWidth placeholder="https://" />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField label="Contact email (optional)" value={form.contact_email} onChange={set("contact_email")} fullWidth inputProps={{ maxLength: 200 }} />
-                  </Grid>
-                </Grid>
-                <Box>
-                  <Button type="submit" variant="contained" disabled={checking || !canCheck}>
-                    {checking ? <CircularProgress size={22} color="inherit" /> : "Check for warning signs"}
-                  </Button>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-          {result && <ResultCard result={result} />}
-        </Grid>
-
-        <Grid item xs={12} lg={5}>
-          <Card>
-            <CardHeader title="Recent checks" />
-            <Divider />
-            <CardContent sx={{ p: 0 }}>
-              {history.error && <Alert severity="error" sx={{ m: 2 }}>{history.error}</Alert>}
-              {history.data?.length ? (
-                <List disablePadding>
-                  {history.data.slice(0, 15).map((h) => {
-                    const meta = SCAM_LEVELS[h.risk_level] || SCAM_LEVELS.low_concern;
-                    return (
-                      <ListItem
-                        key={h.id}
-                        divider
-                        secondaryAction={
-                          <Tooltip title="Delete">
-                            <IconButton edge="end" size="small" onClick={() => remove(h.id)} aria-label="Delete check"><DeleteOutline fontSize="small" /></IconButton>
-                          </Tooltip>
-                        }
-                      >
-                        <ListItemText
-                          primary={<Stack direction="row" spacing={1} alignItems="center"><Chip size="small" color={meta.color} label={meta.label} /><Typography variant="body2" noWrap>{h.title || h.company || "Pasted text"}</Typography></Stack>}
-                          secondary={`${formatDateTime(h.created_at)} - score ${h.concern_score}`}
-                        />
-                      </ListItem>
-                    );
-                  })}
-                </List>
-              ) : (
-                <Typography color="text.secondary" sx={{ p: 3 }} align="center">
-                  {history.loading ? "Loading..." : "No checks yet."}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    </AnimatedPage>
+      <CheckForm onDone={() => setRefreshKey((k) => k + 1)} />
+      <History refreshKey={refreshKey} />
+    </>
   );
 }

@@ -35,19 +35,19 @@ import StatCard from "../components/StatCard";
 import ScoreBreakdownChart from "../components/ScoreBreakdownChart";
 import useApi from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
-import { aiApi, dashboardApi, healthApi, profileApi, resumesApi } from "../services/endpoints";
+import { aiApi, healthApi, jobsApi, matchesApi, profileApi, resumesApi } from "../services/endpoints";
 import { COMPLETENESS_LABELS, formatDate } from "../utils/format";
 
-// Real counts from /dashboard/stats. Career development progress needs the Phase 7 modules, so it shows no number.
-const PIPELINE_METRICS = [
-  { label: "Jobs discovered", icon: TravelExploreOutlined, key: "jobs_discovered", to: "/job-search" },
-  { label: "Matching opportunities", icon: WorkOutlineOutlined, key: "matching_opportunities", to: "/job-matches" },
-  { label: "Applications submitted", icon: SendOutlined, key: "applications_submitted", to: "/applications" },
-  { label: "Pending applications", icon: HourglassEmpty, key: "applications_pending", to: "/applications" },
-  { label: "Interview invitations", icon: EventAvailableOutlined, key: "interview_invitations", to: "/applications" },
-  { label: "Rejections", icon: CancelOutlined, key: "rejections", to: "/applications" },
-  { label: "Career development progress", icon: TrendingUp, key: null, phase: "Phase 7" },
+// Metrics that still need backend modules. Shown without numbers (never faked).
+const PENDING_METRICS = [
+  { label: "Applications submitted", icon: SendOutlined, phase: "Phase 6" },
+  { label: "Pending applications", icon: HourglassEmpty, phase: "Phase 6" },
+  { label: "Interview invitations", icon: EventAvailableOutlined, phase: "Phase 6" },
+  { label: "Rejections", icon: CancelOutlined, phase: "Phase 6" },
+  { label: "Career development progress", icon: TrendingUp, phase: "Phase 7" },
 ];
+
+const GOOD_MATCH_SCORE = 55; // "good" or better, same threshold the backend labels use
 
 function aiState(ai, error) {
   if (error) return { value: "Unknown", color: "warning", caption: "Could not check the AI service" };
@@ -63,7 +63,8 @@ export default function Overview() {
   const profile = useApi(() => profileApi.get());
   const ai = useApi(() => aiApi.status());
   const health = useApi(() => healthApi.get());
-  const stats = useApi(() => dashboardApi.stats());
+  const jobs = useApi(() => jobsApi.list({ limit: 1 }));
+  const goodMatches = useApi(() => matchesApi.list({ min_score: GOOD_MATCH_SCORE, limit: 1 }));
 
   const resumeList = resumes.data || [];
   const primary = resumeList.find((r) => r.is_primary) || resumeList[0];
@@ -71,11 +72,11 @@ export default function Overview() {
   const completeness = profile.data?.completeness;
   const ais = aiState(ai.data, ai.error);
 
-  // Real, derived next steps.
   const steps = [
     { done: resumeList.length > 0, label: "Upload your resume", to: "/resume" },
     { done: Boolean(profile.data?.exists), label: "Save your candidate profile", to: "/resume" },
     { done: Boolean(analysis), label: "Run Resume Intelligence on your primary resume", to: "/resume-intelligence" },
+    { done: (jobs.data?.total ?? 0) > 0, label: "Find or add your first jobs", to: "/job-search" },
     { done: Boolean(ai.data?.reachable && ai.data?.model_available), label: "Start Ollama and install the local model", to: "/settings" },
   ];
 
@@ -124,6 +125,27 @@ export default function Overview() {
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
           <StatCard icon={MemoryOutlined} label="Local AI (Ollama)" value={ais.value} caption={ais.caption} color={ais.color} loading={ai.loading && !ai.data && !ai.error} />
+        </Grid>
+
+        <Grid item xs={12} sm={6} lg={3}>
+          <StatCard
+            icon={TravelExploreOutlined}
+            label="Jobs discovered"
+            value={jobs.error ? "-" : jobs.data?.total ?? 0}
+            caption={jobs.error ? "Could not load" : "Saved to your account"}
+            color="primary"
+            loading={jobs.loading && !jobs.data}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} lg={3}>
+          <StatCard
+            icon={WorkOutlineOutlined}
+            label="Matching opportunities"
+            value={goodMatches.error ? "-" : goodMatches.data?.total ?? 0}
+            caption={goodMatches.error ? "Could not load" : `Score ${GOOD_MATCH_SCORE}+ ("good" or better)`}
+            color="success"
+            loading={goodMatches.loading && !goodMatches.data}
+          />
         </Grid>
 
         <Grid item xs={12} lg={7}>
@@ -196,43 +218,28 @@ export default function Overview() {
         <Grid item xs={12}>
           <Card>
             <CardHeader
-              title="Job search pipeline"
-              subheader="Live counts from your saved jobs and applications."
+              title="Application pipeline"
+              subheader="These metrics appear once the applications and interview modules are built. No placeholder numbers are shown."
             />
             <Divider />
             <CardContent>
               <Grid container spacing={2}>
-                {stats.error && (
-                  <Grid item xs={12}>
-                    <Alert severity="error">{stats.error}</Alert>
+                {PENDING_METRICS.map(({ label, icon: Icon, phase }) => (
+                  <Grid item xs={12} sm={6} md={4} lg={3} key={label}>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ p: 1.5, border: 1, borderColor: "divider", borderRadius: 2 }}>
+                      <Icon color="disabled" />
+                      <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                        <Typography variant="body2" noWrap>
+                          {label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Awaiting backend
+                        </Typography>
+                      </Box>
+                      <Chip size="small" label={phase} variant="outlined" />
+                    </Stack>
                   </Grid>
-                )}
-                {PIPELINE_METRICS.map(({ label, icon: Icon, key, to, phase }) => {
-                  const value = key && stats.data ? stats.data[key] : null;
-                  return (
-                    <Grid item xs={12} sm={6} md={4} lg={3} key={label}>
-                      <Stack
-                        direction="row"
-                        spacing={1.5}
-                        alignItems="center"
-                        component={to ? RouterLink : "div"}
-                        to={to}
-                        sx={{ p: 1.5, border: 1, borderColor: "divider", borderRadius: 2, textDecoration: "none", color: "inherit", "&:hover": to ? { bgcolor: "action.hover" } : undefined }}
-                      >
-                        <Icon color={key ? "primary" : "disabled"} />
-                        <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-                          <Typography variant="body2" noWrap>
-                            {label}
-                          </Typography>
-                          <Typography variant="h6" component="div" sx={{ lineHeight: 1.2 }}>
-                            {key ? (stats.data ? value : "...") : "-"}
-                          </Typography>
-                        </Box>
-                        {phase && <Chip size="small" label={`${phase} module`} variant="outlined" />}
-                      </Stack>
-                    </Grid>
-                  );
-                })}
+                ))}
               </Grid>
             </CardContent>
           </Card>

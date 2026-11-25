@@ -11,7 +11,10 @@ def get_weights(user: dict) -> dict:
 
 
 def score_and_store(user: dict, job: dict, cand: dict) -> dict:
-    """Score one job for the user and upsert the result into job_matches."""
+    """Score one job for the user and upsert the result into job_matches.
+
+    Any previously stored AI explanation is cleared because it described the old score.
+    """
     result = score_job(job, cand, get_weights(user))
     doc = {
         "user_id": user["_id"],
@@ -26,6 +29,17 @@ def score_and_store(user: dict, job: dict, cand: dict) -> dict:
         "computed_at": utcnow(),
     }
     get_db().job_matches.update_one(
-        {"user_id": user["_id"], "job_id": job["_id"]}, {"$set": doc}, upsert=True
+        {"user_id": user["_id"], "job_id": job["_id"]},
+        {"$set": doc, "$unset": {"explanation": "", "explanation_at": ""}},
+        upsert=True,
     )
     return result
+
+
+def rescore_all(user: dict, cand: dict, limit: int = 500) -> int:
+    """Re-score the user's most recent jobs (e.g. after a profile or weight change)."""
+    count = 0
+    for job in get_db().jobs.find({"user_id": user["_id"]}).sort("created_at", -1).limit(limit):
+        score_and_store(user, job, cand)
+        count += 1
+    return count

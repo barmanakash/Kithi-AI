@@ -5,242 +5,263 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
   Checkbox,
-  CircularProgress,
   FormControlLabel,
-  FormGroup,
-  Grid,
   InputAdornment,
+  LinearProgress,
   MenuItem,
-  Pagination,
+  Skeleton,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from "@mui/material";
-import SearchOutlined from "@mui/icons-material/SearchOutlined";
-import AddOutlined from "@mui/icons-material/AddOutlined";
+import AddIcon from "@mui/icons-material/Add";
+import SearchIcon from "@mui/icons-material/Search";
 import PageHeader from "../components/PageHeader";
-import AnimatedPage from "../components/AnimatedPage";
-import ConfirmDialog from "../components/ConfirmDialog";
-import JobCard from "../components/JobCard";
-import ManualJobDialog from "../components/ManualJobDialog";
+import JobCard from "../components/jobs/JobCard";
+import JobDetailDialog from "../components/jobs/JobDetailDialog";
+import AddJobDialog from "../components/jobs/AddJobDialog";
 import useApi from "../hooks/useApi";
 import { useToast } from "../context/ToastContext";
-import { applicationsApi, jobsApi } from "../services/endpoints";
+import { jobsApi } from "../services/endpoints";
 import { errorMessage } from "../utils/format";
+import { SOURCE_LABELS } from "../utils/jobs";
 
-const PAGE_SIZE = 20;
+const SOURCES = ["remotive", "arbeitnow"];
+const PAGE = 25;
 
-export default function JobSearch() {
+function DiscoverTab({ onOpen, results, setResults }) {
   const toast = useToast();
-  const sources = useApi(() => jobsApi.sources());
-  const [form, setForm] = useState({ query: "", location: "", limit: 20, sources: null });
-  const [searching, setSearching] = useState(false);
-  const [result, setResult] = useState(null);
-  const [filterInput, setFilterInput] = useState("");
-  const [filter, setFilter] = useState("");
-  const [page, setPage] = useState(1);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [toDelete, setToDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [trackingId, setTrackingId] = useState(null);
+  const [query, setQuery] = useState("");
+  const [location, setLocation] = useState("");
+  const [limit, setLimit] = useState(15);
+  const [sources, setSources] = useState(SOURCES);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const saved = useApi(() => jobsApi.list({ q: filter || undefined, skip: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE }), [filter, page]);
+  const toggle = (name) =>
+    setSources((s) => (s.includes(name) ? s.filter((x) => x !== name) : [...s, name]));
 
-  const allSources = sources.data?.sources || [];
-  const selected = form.sources ?? allSources;
-
-  const toggleSource = (name) => {
-    const next = selected.includes(name) ? selected.filter((s) => s !== name) : [...selected, name];
-    setForm((f) => ({ ...f, sources: next }));
-  };
-
-  const search = async (e) => {
-    e.preventDefault();
-    if (form.query.trim().length < 2) return toast.warning("Enter a job title or keyword (at least 2 characters).");
-    if (!selected.length) return toast.warning("Select at least one job source.");
-    setSearching(true);
-    setResult(null);
+  const search = async (event) => {
+    event.preventDefault();
+    if (query.trim().length < 2 || !sources.length) return;
+    setError("");
+    setLoading(true);
     try {
       const res = await jobsApi.discover({
-        query: form.query.trim(),
-        location: form.location.trim() || null,
-        limit: Number(form.limit),
-        sources: selected,
+        query: query.trim(),
+        location: location.trim() || null,
+        limit,
+        sources,
       });
-      setResult(res);
-      setPage(1);
-      saved.reload();
-      if (res.saved_new > 0) toast.success(`${res.saved_new} new job(s) saved.`);
-      else if (res.found === 0) toast.info("No jobs found for that search.");
-      else toast.info("Everything found was already saved.");
+      setResults(res);
+      if (!res.found) toast.info("No jobs matched that search.");
     } catch (err) {
-      toast.error(errorMessage(err));
+      setError(errorMessage(err, "Job search failed"));
     } finally {
-      setSearching(false);
+      setLoading(false);
     }
   };
 
-  const track = async (job) => {
-    setTrackingId(job.id);
-    try {
-      const res = await applicationsApi.fromJob(job.id);
-      toast[res.created ? "success" : "info"](res.created ? "Added to Applications as Saved." : "Already in your Applications.");
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setTrackingId(null);
-    }
-  };
-
-  const confirmDelete = async () => {
-    setDeleting(true);
-    try {
-      await jobsApi.remove(toDelete.id);
-      toast.success("Job removed.");
-      setResult((r) => (r ? { ...r, jobs: r.jobs.filter((j) => j.id !== toDelete.id) } : r));
-      setToDelete(null);
-      saved.reload();
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const total = saved.data?.total || 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const sourceErrors = result ? Object.entries(result.source_errors || {}) : [];
+  const errorEntries = Object.entries(results?.errors || {});
 
   return (
-    <AnimatedPage>
-      <PageHeader
-        title="AI Job Search"
-        subtitle="Search permitted public job boards. Results are de-duplicated, safety-checked and scored against your profile."
-        actions={
-          <Button variant="outlined" startIcon={<AddOutlined />} onClick={() => setManualOpen(true)}>
-            Add job manually
-          </Button>
-        }
-      />
-
+    <Box>
       <Card sx={{ mb: 3 }}>
-        <CardContent component="form" onSubmit={search}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={5}>
+        <CardContent>
+          <form onSubmit={search}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "flex-start" }}>
               <TextField
+                size="small"
                 label="Job title or keywords"
-                value={form.query}
-                onChange={(e) => setForm((f) => ({ ...f, query: e.target.value }))}
-                fullWidth
                 placeholder="e.g. python developer"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                sx={{ flex: 2 }}
                 inputProps={{ maxLength: 100 }}
-                InputProps={{ startAdornment: <InputAdornment position="start"><SearchOutlined /></InputAdornment> }}
+                InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>) }}
               />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField label="Location (optional)" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} fullWidth inputProps={{ maxLength: 100 }} />
-            </Grid>
-            <Grid item xs={6} md={2}>
-              <TextField select label="Per source" value={form.limit} onChange={(e) => setForm((f) => ({ ...f, limit: e.target.value }))} fullWidth>
-                {[10, 20, 30, 50].map((n) => (
+              <TextField size="small" label="Location (optional)" value={location} onChange={(e) => setLocation(e.target.value)} sx={{ flex: 1 }} inputProps={{ maxLength: 100 }} />
+              <TextField select size="small" label="Per source" value={limit} onChange={(e) => setLimit(Number(e.target.value))} sx={{ minWidth: 110 }}>
+                {[10, 15, 20, 30].map((n) => (
                   <MenuItem key={n} value={n}>
-                    {n}
+                    {n} jobs
                   </MenuItem>
                 ))}
               </TextField>
-            </Grid>
-            <Grid item xs={6} md={2}>
-              <Button type="submit" variant="contained" fullWidth size="large" disabled={searching || sources.loading}>
-                {searching ? <CircularProgress size={22} color="inherit" /> : "Search"}
+              <Button type="submit" variant="contained" disabled={loading || query.trim().length < 2 || !sources.length} sx={{ minWidth: 120, height: 40 }}>
+                {loading ? "Searching..." : "Search"}
               </Button>
-            </Grid>
-            <Grid item xs={12}>
-              <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-                <Typography variant="body2" color="text.secondary">
-                  Sources:
-                </Typography>
-                <FormGroup row>
-                  {allSources.map((name) => (
-                    <FormControlLabel key={name} control={<Checkbox size="small" checked={selected.includes(name)} onChange={() => toggleSource(name)} />} label={name} />
-                  ))}
-                </FormGroup>
-              </Stack>
-              {sources.error && <Alert severity="error" sx={{ mt: 1 }}>{sources.error}</Alert>}
-            </Grid>
-          </Grid>
+            </Stack>
+            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" sx={{ mt: 1 }}>
+              <Typography variant="caption" color="text.secondary">
+                Permitted sources:
+              </Typography>
+              {SOURCES.map((name) => (
+                <FormControlLabel
+                  key={name}
+                  control={<Checkbox size="small" checked={sources.includes(name)} onChange={() => toggle(name)} />}
+                  label={<Typography variant="body2">{SOURCE_LABELS[name]}</Typography>}
+                />
+              ))}
+            </Stack>
+            {loading && <LinearProgress sx={{ mt: 1 }} />}
+          </form>
         </CardContent>
       </Card>
 
-      {result && (
-        <Box sx={{ mb: 4 }}>
-          <Alert severity={result.saved_new > 0 ? "success" : "info"} sx={{ mb: 2 }}>
-            Found {result.found} listing(s): {result.saved_new} new, {result.duplicates_skipped} already saved
-            {result.scored > 0 ? `, ${result.scored} scored.` : "."}
-            {result.scoring_note ? ` ${result.scoring_note}` : ""}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {results && (
+        <>
+          <Alert severity={results.found ? "success" : "info"} sx={{ mb: 2 }}>
+            Found {results.found} job(s): {results.saved} new, {results.duplicates} already saved.
+            {!results.scored && " Add a resume or fill in your profile to see match scores."}
+            {results.at_capacity && " Your saved-jobs limit was reached, so some results were not saved."}
           </Alert>
-          {sourceErrors.map(([name, msg]) => (
-            <Alert severity="warning" key={name} sx={{ mb: 1 }}>
-              Source "{name}" failed: {msg}. The other sources were still searched.
+          {errorEntries.map(([name, message]) => (
+            <Alert key={name} severity="warning" sx={{ mb: 2 }}>
+              {SOURCE_LABELS[name] || name} could not be reached ({message}). Results from the other source are shown.
             </Alert>
           ))}
-          <Stack spacing={2} sx={{ mt: 2 }}>
-            {result.jobs.map((job) => (
-              <JobCard key={job.id} job={job} onTrack={track} onDelete={setToDelete} tracking={trackingId === job.id} />
+          <Stack spacing={2}>
+            {results.items.map((job) => (
+              <JobCard key={job.id} job={job} onOpen={onOpen} />
             ))}
           </Stack>
-        </Box>
+        </>
       )}
 
-      <Card>
-        <CardHeader
-          title="Saved jobs"
-          subheader={`${total} job(s) in your pipeline`}
-          action={
-            <Stack direction="row" spacing={1} component="form" onSubmit={(e) => { e.preventDefault(); setFilter(filterInput.trim()); setPage(1); }}>
-              <TextField size="small" placeholder="Filter by title, company, location" value={filterInput} onChange={(e) => setFilterInput(e.target.value)} sx={{ minWidth: 260 }} />
-              <Button type="submit" size="small">Filter</Button>
-            </Stack>
-          }
-        />
-        <CardContent>
-          {saved.error && <Alert severity="error" sx={{ mb: 2 }}>{saved.error}</Alert>}
-          {saved.loading && !saved.data ? (
-            <Box sx={{ textAlign: "center", py: 4 }}><CircularProgress /></Box>
-          ) : saved.data?.jobs?.length ? (
-            <Stack spacing={2}>
-              {saved.data.jobs.map((job) => (
-                <JobCard key={job.id} job={job} onTrack={track} onDelete={setToDelete} tracking={trackingId === job.id} />
-              ))}
-              {pages > 1 && <Pagination count={pages} page={page} onChange={(_, p) => setPage(p)} sx={{ alignSelf: "center" }} />}
-            </Stack>
-          ) : (
-            <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
-              {filter ? "No saved jobs match that filter." : "No saved jobs yet. Run a search above or add a job manually."}
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
+      {!results && !loading && (
+        <Typography color="text.secondary" align="center" sx={{ py: 6 }}>
+          Search public job boards. Results are saved to your account, scored against your profile, and checked for scam signals.
+        </Typography>
+      )}
+    </Box>
+  );
+}
 
-      <ManualJobDialog
-        open={manualOpen}
-        onClose={() => setManualOpen(false)}
-        onSaved={(res) => {
-          setManualOpen(false);
-          toast[res.created ? "success" : "info"](res.created ? "Job saved." : "That job was already saved.");
-          saved.reload();
+function SavedTab({ onOpen, refreshKey }) {
+  const [input, setInput] = useState("");
+  const [q, setQ] = useState("");
+  const [limit, setLimit] = useState(PAGE);
+  const { data, loading, error, reload } = useApi(() => jobsApi.list({ q: q || undefined, limit }), [q, limit, refreshKey]);
+  const items = data?.items || [];
+
+  return (
+    <Box>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setLimit(PAGE);
+          setQ(input.trim());
+        }}
+      >
+        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+          <TextField size="small" fullWidth placeholder="Filter saved jobs by title or company" value={input} onChange={(e) => setInput(e.target.value)} inputProps={{ maxLength: 100 }} />
+          <Button type="submit" variant="outlined">
+            Filter
+          </Button>
+        </Stack>
+      </form>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" size="small" onClick={reload}>Retry</Button>}>
+          {error}
+        </Alert>
+      )}
+
+      {loading && !data ? (
+        <Stack spacing={2}>
+          <Skeleton variant="rounded" height={120} />
+          <Skeleton variant="rounded" height={120} />
+        </Stack>
+      ) : items.length === 0 && !error ? (
+        <Typography color="text.secondary" align="center" sx={{ py: 6 }}>
+          {q ? "No saved jobs match that filter." : "No saved jobs yet. Search for jobs or add one manually."}
+        </Typography>
+      ) : (
+        <>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+            Showing {items.length} of {data?.total ?? 0}
+          </Typography>
+          <Stack spacing={2}>
+            {items.map((job) => (
+              <JobCard key={job.id} job={job} onOpen={onOpen} />
+            ))}
+          </Stack>
+          {data && items.length < data.total && (
+            <Box sx={{ textAlign: "center", mt: 3 }}>
+              <Button onClick={() => setLimit((l) => l + PAGE)} disabled={loading}>
+                Show more
+              </Button>
+            </Box>
+          )}
+        </>
+      )}
+    </Box>
+  );
+}
+
+export default function JobSearch() {
+  const toast = useToast();
+  const [tab, setTab] = useState(0);
+  const [results, setResults] = useState(null);
+  const [openId, setOpenId] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // After the detail dialog changes a job (re-score or delete), refresh what is on screen.
+  const handleChanged = async () => {
+    setRefreshKey((k) => k + 1);
+    if (!results || !openId) return;
+    const id = openId;
+    try {
+      const res = await jobsApi.get(id);
+      const match = res.match ? { score: res.match.score, label: res.match.label } : null;
+      setResults((r) => ({ ...r, items: r.items.map((j) => (j.id === id ? { ...j, match } : j)) }));
+    } catch (err) {
+      if (err.response?.status === 404) setResults((r) => ({ ...r, items: r.items.filter((j) => j.id !== id) }));
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        title="AI Job Search"
+        subtitle="Discover jobs from permitted public sources. Every result is saved, scored with evidence, and screened for scam signals."
+        actions={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+            Add job
+          </Button>
+        }
+      />
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}>
+        <Tab label="Discover" />
+        <Tab label="Saved jobs" />
+      </Tabs>
+
+      {tab === 0 ? (
+        <DiscoverTab onOpen={(job) => setOpenId(job.id)} results={results} setResults={setResults} />
+      ) : (
+        <SavedTab onOpen={(job) => setOpenId(job.id)} refreshKey={refreshKey} />
+      )}
+
+      {openId && <JobDetailDialog jobId={openId} onClose={() => setOpenId(null)} onChanged={handleChanged} />}
+
+      <AddJobDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={(res) => {
+          setAddOpen(false);
+          setRefreshKey((k) => k + 1);
+          toast.success(res.created ? "Job saved and scored" : "That job was already saved");
+          setTab(1);
+          setOpenId(res.job.id);
         }}
       />
-      <ConfirmDialog
-        open={Boolean(toDelete)}
-        title="Remove this job?"
-        message={toDelete ? `"${toDelete.title}" at ${toDelete.company} and its match score will be deleted. Tracked applications are kept.` : ""}
-        confirmLabel="Remove"
-        loading={deleting}
-        onConfirm={confirmDelete}
-        onClose={() => setToDelete(null)}
-      />
-    </AnimatedPage>
+    </>
   );
 }
