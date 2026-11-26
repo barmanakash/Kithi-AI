@@ -179,3 +179,12 @@ export const salaryApi = {
 export const recoveryApi = {
   get: () => data(api.get("/recovery")),
 };
+
+// Company Research: public website + your saved jobs for that company (server: /api/company-research).
+export const companyResearchApi = {
+  list: () => data(api.get("/company-research")),
+  get: (id) => data(api.get(`/company-research/${id}`)),
+  // Fetches a few web pages and may call the local model, so allow extra time.
+  research: (body) => data(api.post("/company-research", body, { timeout: AI_TIMEOUT })),
+  remove: (id) => data(api.delete(`/company-research/${id}`)),
+};

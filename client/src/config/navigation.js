@@ -11,6 +11,7 @@ import InsightsOutlined from "@mui/icons-material/InsightsOutlined";
 import PaymentsOutlined from "@mui/icons-material/PaymentsOutlined";
 import GppMaybeOutlined from "@mui/icons-material/GppMaybeOutlined";
 import BuildOutlined from "@mui/icons-material/BuildOutlined";
+import BusinessOutlined from "@mui/icons-material/BusinessOutlined";
 import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 
 /**
@@ -21,6 +22,7 @@ export const NAV_ITEMS = [
   { path: "/overview", label: "Overview", icon: SpaceDashboardOutlined, ready: true },
   { path: "/job-search", label: "AI Job Search", icon: TravelExploreOutlined, ready: true },
   { path: "/job-matches", label: "Job Matches", icon: WorkOutlineOutlined, ready: true },
+  { path: "/company-research", label: "Company Research", icon: BusinessOutlined, ready: true },
   { path: "/resume", label: "My Resume", icon: DescriptionOutlined, ready: true },
   { path: "/resume-intelligence", label: "Resume Intelligence", icon: PsychologyOutlined, ready: true },
   {

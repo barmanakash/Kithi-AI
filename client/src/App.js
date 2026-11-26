@@ -19,6 +19,7 @@ import CareerCoach from "./pages/CareerCoach";
 import InterviewLab from "./pages/InterviewLab";
 import SalaryIntelligence from "./pages/SalaryIntelligence";
 import Recovery from "./pages/Recovery";
+import CompanyResearch from "./pages/CompanyResearch";
 
 export default function App() {
   return (
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="/interview-lab" element={<InterviewLab />} />
           <Route path="/salary" element={<SalaryIntelligence />} />
           <Route path="/recovery" element={<Recovery />} />
+          <Route path="/company-research" element={<CompanyResearch />} />
           {PENDING_ITEMS.map((item) => (
             <Route key={item.path} path={item.path} element={<ComingSoon item={item} />} />
           ))}
