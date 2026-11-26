@@ -14,6 +14,11 @@ def _check(key: str, label: str, status: str, message: str) -> dict:
     return {"key": key, "label": label, "status": status, "message": message}
 
 
+def _doc_text(doc: dict) -> str:
+    """Generated drafts store their plain text in `text` (older drafts used `content_markdown`)."""
+    return doc.get("text") or doc.get("content_markdown") or ""
+
+
 def check_application(
     app: dict,
     cand: dict,
@@ -34,7 +39,7 @@ def check_application(
     primary = cand.get("resume")
     if resume_doc:
         checks.append(_check("resume", "Resume for this application", "pass", f"Tailored resume attached: {resume_doc.get('title', 'untitled')}."))
-        if _PLACEHOLDER.search(resume_doc.get("content_markdown", "")):
+        if _PLACEHOLDER.search(_doc_text(resume_doc)):
             checks.append(_check("resume_placeholders", "Resume placeholder text", "fail", "The attached resume contains placeholder text such as [brackets] or TODO. Edit it before using it."))
     elif primary:
         checks.append(_check("resume", "Resume for this application", "warn", "No tailored resume attached. Your primary resume would be used. Generating a tailored version usually improves relevance."))
@@ -51,7 +56,7 @@ def check_application(
 
     # Cover letter
     if letter_doc:
-        if _PLACEHOLDER.search(letter_doc.get("content_markdown", "")):
+        if _PLACEHOLDER.search(_doc_text(letter_doc)):
             checks.append(_check("cover_letter", "Cover letter", "fail", "The attached cover letter contains placeholder text. Edit it before sending."))
         else:
             checks.append(_check("cover_letter", "Cover letter", "pass", "A cover letter is attached."))
