@@ -10,6 +10,7 @@ import AssignmentOutlined from "@mui/icons-material/AssignmentOutlined";
 import InsightsOutlined from "@mui/icons-material/InsightsOutlined";
 import PaymentsOutlined from "@mui/icons-material/PaymentsOutlined";
 import GppMaybeOutlined from "@mui/icons-material/GppMaybeOutlined";
+import BuildOutlined from "@mui/icons-material/BuildOutlined";
 import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 
 /**
@@ -37,6 +38,7 @@ export const NAV_ITEMS = [
   { path: "/recruiter-hub", label: "Recruiter Hub", icon: ForumOutlined, ready: true },
   { path: "/applications", label: "Applications", icon: AssignmentOutlined, ready: true },
   { path: "/analytics", label: "Career Analytics", icon: InsightsOutlined, ready: true },
+  { path: "/recovery", label: "Search Recovery", icon: BuildOutlined, ready: true },
   {
     path: "/salary",
     label: "Salary Intelligence",

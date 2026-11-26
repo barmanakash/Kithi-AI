@@ -174,3 +174,8 @@ export const salaryApi = {
   compare: (ids) => data(api.post("/salary/compare", { ids })),
   negotiation: (id, body) => data(api.post(`/salary/offers/${id}/negotiation-message`, body, { timeout: AI_TIMEOUT })),
 };
+
+// Job Search Recovery: read-only analysis of your own tracked data (server: GET /api/recovery).
+export const recoveryApi = {
+  get: () => data(api.get("/recovery")),
+};

@@ -73,7 +73,8 @@ export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const { mode, toggle } = useColorMode();
 
-  const current = NAV_ITEMS.find((item) => location.pathname.startsWith(item.path));
+  const isActive = (item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+  const current = NAV_ITEMS.find(isActive);
 
   const handleLogout = () => {
     setMenuAnchor(null);
@@ -88,7 +89,7 @@ export default function DashboardLayout() {
       <List sx={{ px: 1.5, py: 1.5, flexGrow: 1, overflowY: "auto" }}>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const selected = location.pathname.startsWith(item.path);
+          const selected = isActive(item);
           return (
             <ListItemButton
               key={item.path}
@@ -118,7 +119,7 @@ export default function DashboardLayout() {
       <Divider />
       <Box sx={{ p: 2 }}>
         <Typography variant="caption" color="text.secondary">
-          Local-first. Your data and AI inference stay on this machine.
+          Build by Akash Barman.
         </Typography>
       </Box>
     </Box>
