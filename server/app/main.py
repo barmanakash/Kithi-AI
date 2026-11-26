@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.database.mongo import close_client, init_db, ping
-from app.routes import account, ai, applications, auth, career, dashboard, generate, health, interviews, matches, memory, profile, recruiter_messages, recruiters, resumes, scam
+from app.routes import account, ai, applications, auth, career, coach, dashboard, generate, health, interviews, matches, memory, profile, recruiter_messages, recruiters, resumes, salary, scam
 from app.routes import jobs as jobs_routes
 from app.services.ai_service import AIServiceError, get_ai_service
 
@@ -75,7 +75,7 @@ def create_app() -> FastAPI:
     for module in (
         health, auth, profile, resumes, ai, account,
         jobs_routes, matches, scam, applications, dashboard, generate,
-        recruiters, recruiter_messages, career, memory, interviews,
+        recruiters, recruiter_messages, career, memory, interviews, salary, coach,
     ):
         app.include_router(module.router, prefix=prefix)
 

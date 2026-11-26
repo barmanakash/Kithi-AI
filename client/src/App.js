@@ -11,7 +11,13 @@ import ResumeIntelligence from "./pages/ResumeIntelligence";
 import JobSearch from "./pages/JobSearch";
 import JobMatches from "./pages/JobMatches";
 import ScamDetection from "./pages/ScamDetection";
+import Applications from "./pages/Applications";
+import Analytics from "./pages/Analytics";
+import RecruiterHub from "./pages/RecruiterHub";
 import Settings from "./pages/Settings";
+import CareerCoach from "./pages/CareerCoach";
+import InterviewLab from "./pages/InterviewLab";
+import SalaryIntelligence from "./pages/SalaryIntelligence";
 
 export default function App() {
   return (
@@ -30,7 +36,13 @@ export default function App() {
           <Route path="/resume" element={<MyResume />} />
           <Route path="/resume-intelligence" element={<ResumeIntelligence />} />
           <Route path="/scam-detection" element={<ScamDetection />} />
+          <Route path="/applications" element={<Applications />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/recruiter-hub" element={<RecruiterHub />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/career-coach" element={<CareerCoach />} />
+          <Route path="/interview-lab" element={<InterviewLab />} />
+          <Route path="/salary" element={<SalaryIntelligence />} />
           {PENDING_ITEMS.map((item) => (
             <Route key={item.path} path={item.path} element={<ComingSoon item={item} />} />
           ))}

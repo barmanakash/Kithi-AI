@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, LinearProgress, Stack, Typography } from "@mui/material";
 import CheckCircleOutline from "@mui/icons-material/CheckCircleOutline";
 import WarningAmberOutlined from "@mui/icons-material/WarningAmberOutlined";
 import ErrorOutline from "@mui/icons-material/ErrorOutline";
@@ -14,7 +14,7 @@ const ICONS = {
   info: <InfoOutlined color="info" />,
 };
 
-/** Application Quality Checker: read-only validation before you apply. */
+/** Application Quality Checker: a read-only checklist to review before you apply. It changes nothing. */
 export default function QualityCheckDialog({ application, onClose }) {
   const [state, setState] = useState({ loading: false, data: null, error: "" });
 
@@ -32,6 +32,13 @@ export default function QualityCheckDialog({ application, onClose }) {
   }, [application]);
 
   const { loading, data, error } = state;
+  const summary = data
+    ? data.blocking > 0
+      ? `${data.blocking} blocking issue(s) to fix before you apply.`
+      : data.warnings > 0
+      ? `No blockers. ${data.warnings} suggestion(s) to review.`
+      : "Everything looks ready."
+    : "";
 
   return (
     <Dialog open={Boolean(application)} onClose={onClose} maxWidth="sm" fullWidth>
@@ -41,23 +48,24 @@ export default function QualityCheckDialog({ application, onClose }) {
         {error && <Alert severity="error">{error}</Alert>}
         {data && (
           <Stack spacing={2}>
-            <Alert severity={data.ready ? (data.readiness_percent === 100 ? "success" : "info") : "error"}>{data.summary}</Alert>
+            <Alert severity={data.ready ? (data.warnings ? "info" : "success") : "error"}>{summary}</Alert>
             <Box>
-              <Typography variant="caption" color="text.secondary">Readiness {data.readiness_percent}%</Typography>
-              <LinearProgress variant="determinate" value={data.readiness_percent} sx={{ height: 8, borderRadius: 4 }} />
+              <Stack direction="row" justifyContent="space-between">
+                <Typography variant="caption" color="text.secondary">Readiness score</Typography>
+                <Chip size="small" label={`${data.score}/100`} />
+              </Stack>
+              <LinearProgress variant="determinate" value={data.score} sx={{ height: 8, borderRadius: 4, mt: 0.5 }} />
             </Box>
             {data.checks.map((c) => (
               <Stack key={c.key} direction="row" spacing={1.5} alignItems="flex-start">
                 {ICONS[c.status]}
                 <Box>
                   <Typography variant="body2" fontWeight={600}>{c.label}</Typography>
-                  <Typography variant="body2" color="text.secondary">{c.detail}</Typography>
+                  <Typography variant="body2" color="text.secondary">{c.message}</Typography>
                 </Box>
               </Stack>
             ))}
-            <Typography variant="caption" color="text.secondary">
-              Kithi never submits applications for you. You decide when and where to apply.
-            </Typography>
+            <Typography variant="caption" color="text.secondary">{data.note}</Typography>
           </Stack>
         )}
       </DialogContent>

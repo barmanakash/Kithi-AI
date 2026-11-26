@@ -1,12 +1,20 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   MenuItem,
@@ -28,6 +36,7 @@ import AddOutlined from "@mui/icons-material/AddOutlined";
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import EditOutlined from "@mui/icons-material/EditOutlined";
 import FactCheckOutlined from "@mui/icons-material/FactCheckOutlined";
+import ForumOutlined from "@mui/icons-material/ForumOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
 import OpenInNew from "@mui/icons-material/OpenInNew";
 import PageHeader from "../components/PageHeader";
@@ -37,25 +46,27 @@ import ApplicationDialog from "../components/ApplicationDialog";
 import QualityCheckDialog from "../components/QualityCheckDialog";
 import useApi from "../hooks/useApi";
 import { useToast } from "../context/ToastContext";
-import { applicationsApi, resumesApi } from "../services/endpoints";
-import { errorMessage, formatDateTime } from "../utils/format";
+import { applicationsApi } from "../services/endpoints";
+import { errorMessage, formatDateTime, scoreColor } from "../utils/format";
 import { APPLICATION_STATUSES, safeUrl, statusColor, statusLabel } from "../utils/statuses";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const CLOSED = ["rejected", "withdrawn", "offer_received"];
 
 function StatusSelect({ app, onChange, sx }) {
   return (
-    <TextField select size="small" value={app.status} onChange={(e) => onChange(app, e.target.value)} sx={sx} aria-label="Application status">
+    <TextField select size="small" value={app.status} onChange={(e) => onChange(app, e.target.value)} sx={sx} inputProps={{ "aria-label": "Application status" }}>
       {APPLICATION_STATUSES.map((s) => <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>)}
     </TextField>
   );
 }
 
-function ActionButtons({ app, onEdit, onCheck, onDelete }) {
+function ActionButtons({ app, onEdit, onCheck, onDelete, onDraft }) {
   const url = safeUrl(app.job_url);
   return (
     <Stack direction="row" spacing={0.25}>
       <Tooltip title="Quality check"><IconButton size="small" onClick={() => onCheck(app)} aria-label="Quality check"><FactCheckOutlined fontSize="small" /></IconButton></Tooltip>
+      <Tooltip title="Draft a message (you approve before anything is sent)"><IconButton size="small" onClick={() => onDraft(app)} aria-label="Draft a message"><ForumOutlined fontSize="small" /></IconButton></Tooltip>
       <Tooltip title="Edit"><IconButton size="small" onClick={() => onEdit(app)} aria-label="Edit"><EditOutlined fontSize="small" /></IconButton></Tooltip>
       {url && <Tooltip title="Open job posting"><IconButton size="small" component="a" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open job posting"><OpenInNew fontSize="small" /></IconButton></Tooltip>}
       <Tooltip title="Delete"><IconButton size="small" onClick={() => onDelete(app)} aria-label="Delete"><DeleteOutline fontSize="small" /></IconButton></Tooltip>
@@ -65,18 +76,22 @@ function ActionButtons({ app, onEdit, onCheck, onDelete }) {
 
 function FollowUpChip({ app }) {
   if (!app.follow_up_date) return null;
-  const overdue = app.follow_up_date < todayIso() && !["rejected", "withdrawn", "offer_received"].includes(app.status);
+  const overdue = app.follow_up_date < todayIso() && !CLOSED.includes(app.status);
   return <Chip size="small" variant="outlined" color={overdue ? "error" : "default"} label={`${overdue ? "Overdue: " : "Follow up: "}${app.follow_up_date}`} />;
 }
 
-function KanbanBoard({ apps, onMove, onEdit, onCheck, onDelete }) {
+function MatchChip({ app }) {
+  const score = app.job_match?.score;
+  return score == null ? null : <Chip size="small" color={scoreColor(score)} label={`${score}% match`} />;
+}
+
+function KanbanBoard({ apps, onMove, ...actions }) {
   const [dragOver, setDragOver] = useState(null);
 
   const drop = (e, status) => {
     e.preventDefault();
     setDragOver(null);
-    const id = e.dataTransfer.getData("text/plain");
-    const app = apps.find((a) => a.id === id);
+    const app = apps.find((a) => a.id === e.dataTransfer.getData("text/plain"));
     if (app && app.status !== status) onMove(app, status);
   };
 
@@ -104,11 +119,13 @@ function KanbanBoard({ apps, onMove, onEdit, onCheck, onDelete }) {
                     <Typography variant="body2" fontWeight={600} noWrap>{app.job_title}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap display="block">{app.company}</Typography>
                     <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ my: 1 }}>
+                      <MatchChip app={app} />
                       <FollowUpChip app={app} />
-                      {app.resume_label && <Chip size="small" variant="outlined" label={app.resume_label} sx={{ maxWidth: 200 }} />}
+                      {app.resume_version_id && <Chip size="small" variant="outlined" label="Tailored resume" />}
+                      {app.cover_letter_version_id && <Chip size="small" variant="outlined" label="Cover letter" />}
                     </Stack>
                     <StatusSelect app={app} onChange={onMove} sx={{ width: "100%", mb: 1 }} />
-                    <ActionButtons app={app} onEdit={onEdit} onCheck={onCheck} onDelete={onDelete} />
+                    <ActionButtons app={app} {...actions} />
                   </CardContent>
                 </Card>
               ))}
@@ -120,7 +137,7 @@ function KanbanBoard({ apps, onMove, onEdit, onCheck, onDelete }) {
   );
 }
 
-function ApplicationsTable({ apps, onMove, onEdit, onCheck, onDelete }) {
+function ApplicationsTable({ apps, onMove, ...actions }) {
   return (
     <TableContainer component={Paper} variant="outlined">
       <Table size="small">
@@ -129,9 +146,9 @@ function ApplicationsTable({ apps, onMove, onEdit, onCheck, onDelete }) {
             <TableCell>Company</TableCell>
             <TableCell>Job title</TableCell>
             <TableCell>Status</TableCell>
+            <TableCell>Match</TableCell>
             <TableCell>Applied</TableCell>
             <TableCell>Follow-up</TableCell>
-            <TableCell>Resume</TableCell>
             <TableCell align="right">Actions</TableCell>
           </TableRow>
         </TableHead>
@@ -141,10 +158,10 @@ function ApplicationsTable({ apps, onMove, onEdit, onCheck, onDelete }) {
               <TableCell>{app.company}</TableCell>
               <TableCell>{app.job_title}</TableCell>
               <TableCell><StatusSelect app={app} onChange={onMove} sx={{ minWidth: 190 }} /></TableCell>
+              <TableCell>{app.job_match?.score != null ? <MatchChip app={app} /> : "-"}</TableCell>
               <TableCell>{app.application_date || "-"}</TableCell>
               <TableCell>{app.follow_up_date ? <FollowUpChip app={app} /> : "-"}</TableCell>
-              <TableCell>{app.resume_label || "-"}</TableCell>
-              <TableCell align="right"><ActionButtons app={app} onEdit={onEdit} onCheck={onCheck} onDelete={onDelete} /></TableCell>
+              <TableCell align="right"><ActionButtons app={app} {...actions} /></TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -153,19 +170,25 @@ function ApplicationsTable({ apps, onMove, onEdit, onCheck, onDelete }) {
   );
 }
 
-function Timeline({ refreshKey }) {
-  const events = useApi(() => applicationsApi.timeline(), [refreshKey]);
-  if (events.loading && !events.data) return <Box sx={{ textAlign: "center", py: 4 }}><CircularProgress /></Box>;
-  if (events.error) return <Alert severity="error">{events.error}</Alert>;
-  if (!events.data?.length) return <Typography color="text.secondary" align="center" sx={{ py: 6 }}>No activity yet.</Typography>;
+/** Every status change across all applications, built from each application's stored history. */
+function Timeline({ apps }) {
+  const events = useMemo(() => {
+    const rows = [];
+    apps.forEach((app) =>
+      (app.history || []).forEach((h, i) => rows.push({ key: `${app.id}-${i}`, app, status: h.status, at: h.at, note: h.note }))
+    );
+    return rows.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 200);
+  }, [apps]);
+
+  if (!events.length) return <Typography color="text.secondary" align="center" sx={{ py: 6 }}>No activity yet.</Typography>;
   return (
     <Stack spacing={0} sx={{ borderLeft: 2, borderColor: "divider", ml: 1.5 }}>
-      {events.data.map((e, i) => (
-        <Box key={`${e.application_id}-${i}`} sx={{ pl: 3, pb: 2.5, position: "relative" }}>
+      {events.map((e) => (
+        <Box key={e.key} sx={{ pl: 3, pb: 2.5, position: "relative" }}>
           <Box sx={{ position: "absolute", left: -7, top: 4, width: 12, height: 12, borderRadius: "50%", bgcolor: statusColor(e.status) === "default" ? "text.disabled" : `${statusColor(e.status)}.main`, border: 2, borderColor: "background.default" }} />
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
             <Chip size="small" color={statusColor(e.status)} label={statusLabel(e.status)} />
-            <Typography variant="body2" fontWeight={600}>{e.job_title} at {e.company}</Typography>
+            <Typography variant="body2" fontWeight={600}>{e.app.job_title} at {e.app.company}</Typography>
           </Stack>
           <Typography variant="caption" color="text.secondary">
             {formatDateTime(e.at)}{e.note ? ` - ${e.note}` : ""}
@@ -176,37 +199,70 @@ function Timeline({ refreshKey }) {
   );
 }
 
+/** "Applied" is recorded only when you state you submitted the application yourself. */
+function AppliedConfirmDialog({ app, busy, onConfirm, onClose }) {
+  const [checked, setChecked] = useState(false);
+  return (
+    <Dialog open={Boolean(app)} onClose={busy ? undefined : onClose} TransitionProps={{ onExited: () => setChecked(false) }}>
+      <DialogTitle>Mark as applied?</DialogTitle>
+      <DialogContent>
+        <DialogContentText sx={{ mb: 2 }}>
+          {app ? `${app.job_title} at ${app.company}. ` : ""}Kithi never submits applications for you. Only continue if you have already submitted this one yourself.
+        </DialogContentText>
+        <FormControlLabel control={<Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)} />} label="I submitted this application myself" />
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button color="inherit" onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button variant="contained" onClick={onConfirm} disabled={!checked || busy}>{busy ? "Saving..." : "Mark as applied"}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export default function Applications() {
   const toast = useToast();
-  const apps = useApi(() => applicationsApi.list({ limit: 1000 }));
-  const resumes = useApi(() => resumesApi.list());
+  const navigate = useNavigate();
+  const apps = useApi(() => applicationsApi.list({ limit: 500 }));
   const [tab, setTab] = useState("kanban");
   const [search, setSearch] = useState("");
   const [dialog, setDialog] = useState({ open: false, app: null });
   const [checkApp, setCheckApp] = useState(null);
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [version, setVersion] = useState(0);
+  const [pendingApplied, setPendingApplied] = useState(null);
+  const [savingApplied, setSavingApplied] = useState(false);
 
-  const all = apps.data?.applications || [];
+  const all = apps.data?.items || [];
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q ? all.filter((a) => `${a.company} ${a.job_title}`.toLowerCase().includes(q)) : all;
   }, [all, search]);
 
-  const refresh = () => {
+  const applyStatus = async (app, status, extra = {}) => {
+    await applicationsApi.changeStatus(app.id, status, extra);
+    toast.success(`Moved to ${statusLabel(status)}.`);
     apps.reload();
-    setVersion((v) => v + 1);
   };
 
   const move = async (app, status) => {
     if (app.status === status) return;
+    if (status === "applied") return setPendingApplied(app); // needs your explicit confirmation first
     try {
-      await applicationsApi.changeStatus(app.id, status);
-      toast.success(`Moved to ${statusLabel(status)}.`);
-      refresh();
+      await applyStatus(app, status);
     } catch (err) {
       toast.error(errorMessage(err));
+    }
+  };
+
+  const confirmApplied = async () => {
+    setSavingApplied(true);
+    try {
+      await applyStatus(pendingApplied, "applied", { confirmed_by_user: true, note: "Confirmed as submitted by you" });
+      setPendingApplied(null);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setSavingApplied(false);
     }
   };
 
@@ -216,7 +272,7 @@ export default function Applications() {
       await applicationsApi.remove(toDelete.id);
       toast.success("Application deleted.");
       setToDelete(null);
-      refresh();
+      apps.reload();
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -224,7 +280,12 @@ export default function Applications() {
     }
   };
 
-  const handlers = { onMove: move, onEdit: (app) => setDialog({ open: true, app }), onCheck: setCheckApp, onDelete: setToDelete };
+  const actions = {
+    onEdit: (app) => setDialog({ open: true, app }),
+    onCheck: setCheckApp,
+    onDelete: setToDelete,
+    onDraft: (app) => navigate(`/recruiter-hub?application=${app.id}`),
+  };
 
   return (
     <AnimatedPage>
@@ -249,30 +310,30 @@ export default function Applications() {
 
       {apps.loading && !apps.data ? (
         <Box sx={{ textAlign: "center", py: 8 }}><CircularProgress /></Box>
-      ) : tab === "timeline" ? (
-        <Timeline refreshKey={version} />
       ) : all.length === 0 ? (
         <Typography color="text.secondary" align="center" sx={{ py: 8 }}>
-          No applications yet. Create one, or use "Track application" on a job from AI Job Search.
+          No applications yet. Create one, or track a job from AI Job Search.
         </Typography>
+      ) : tab === "timeline" ? (
+        <Timeline apps={all} />
       ) : tab === "kanban" ? (
-        <KanbanBoard apps={visible} {...handlers} />
+        <KanbanBoard apps={visible} onMove={move} {...actions} />
       ) : (
-        <ApplicationsTable apps={visible} {...handlers} />
+        <ApplicationsTable apps={visible} onMove={move} {...actions} />
       )}
 
       <ApplicationDialog
         open={dialog.open}
         application={dialog.app}
-        resumes={resumes.data || []}
         onClose={() => setDialog({ open: false, app: null })}
         onSaved={(_, editing) => {
           setDialog({ open: false, app: null });
           toast.success(editing ? "Application updated." : "Application created.");
-          refresh();
+          apps.reload();
         }}
       />
       <QualityCheckDialog application={checkApp} onClose={() => setCheckApp(null)} />
+      <AppliedConfirmDialog app={pendingApplied} busy={savingApplied} onConfirm={confirmApplied} onClose={() => setPendingApplied(null)} />
       <ConfirmDialog
         open={Boolean(toDelete)}
         title="Delete this application?"
