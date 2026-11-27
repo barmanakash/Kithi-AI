@@ -188,3 +188,14 @@ export const companyResearchApi = {
   research: (body) => data(api.post("/company-research", body, { timeout: AI_TIMEOUT })),
   remove: (id) => data(api.delete(`/company-research/${id}`)),
 };
+
+// Application Assistant: opens a visible browser on THIS computer and fills only the fields you approve.
+// It never submits a form. Needs `pip install playwright` and `playwright install chromium` on the server.
+const BROWSER_TIMEOUT = 150000;
+export const formAssistApi = {
+  status: () => data(api.get("/form-assist/status")),
+  open: (body) => data(api.post("/form-assist/sessions", body, { timeout: BROWSER_TIMEOUT })),
+  scan: (id) => data(api.post(`/form-assist/sessions/${id}/scan`, null, { timeout: BROWSER_TIMEOUT })),
+  fill: (id, body) => data(api.post(`/form-assist/sessions/${id}/fill`, body, { timeout: BROWSER_TIMEOUT })),
+  close: (id) => data(api.delete(`/form-assist/sessions/${id}`)),
+};

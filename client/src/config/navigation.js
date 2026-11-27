@@ -12,6 +12,7 @@ import PaymentsOutlined from "@mui/icons-material/PaymentsOutlined";
 import GppMaybeOutlined from "@mui/icons-material/GppMaybeOutlined";
 import BuildOutlined from "@mui/icons-material/BuildOutlined";
 import BusinessOutlined from "@mui/icons-material/BusinessOutlined";
+import AutoFixHighOutlined from "@mui/icons-material/AutoFixHighOutlined";
 import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 
 /**
@@ -39,6 +40,7 @@ export const NAV_ITEMS = [
   },
   { path: "/recruiter-hub", label: "Recruiter Hub", icon: ForumOutlined, ready: true },
   { path: "/applications", label: "Applications", icon: AssignmentOutlined, ready: true },
+  { path: "/application-assistant", label: "Application Assistant", icon: AutoFixHighOutlined, ready: true },
   { path: "/analytics", label: "Career Analytics", icon: InsightsOutlined, ready: true },
   { path: "/recovery", label: "Search Recovery", icon: BuildOutlined, ready: true },
   {

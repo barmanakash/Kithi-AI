@@ -19,6 +19,13 @@ import { applicationsApi, generateApi } from "../services/endpoints";
 import { errorMessage } from "../utils/format";
 import { APPLICATION_STATUSES, statusLabel } from "../utils/statuses";
 
+/** Accept "example.com" as well as "https://example.com"; empty stays empty. */
+const withScheme = (value) => {
+  const t = (value || "").trim();
+  if (!t) return null;
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+};
+
 const EMPTY = {
   company: "",
   job_title: "",
@@ -87,12 +94,12 @@ export default function ApplicationDialog({ open, application, onClose, onSaved 
       name: form.rec_name.trim() || null,
       email: form.rec_email.trim() || null,
       phone: form.rec_phone.trim() || null,
-      linkedin_url: form.rec_linkedin.trim() || null,
+      linkedin_url: withScheme(form.rec_linkedin),
     };
     const shared = {
       company: form.company.trim(),
       job_title: form.job_title.trim(),
-      job_url: form.job_url.trim() || null,
+      job_url: withScheme(form.job_url),
       application_date: form.application_date || null,
       follow_up_date: form.follow_up_date || null,
       resume_version_id: form.resume_version_id || null,
